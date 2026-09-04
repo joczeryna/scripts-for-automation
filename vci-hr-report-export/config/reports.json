@@ -1,0 +1,22 @@
+{
+  "destination_folder": "W:\\Dashboards VCI\\HR Data",
+  "browser_profile_folder": "browser-profile",
+  "temporary_folder": "temp",
+  "worksheet_date_format": "%m%d%Y",
+  "required_headers": [
+    "Employee Number",
+    "Revenue/Non Revenue"
+  ],
+  "reports": [
+    {
+      "name": "Active Employees",
+      "spreadsheet_id": "1t6ONs-qNpVkks_-qkWZIbCNcvKLZGtWKeGLuS4T0VbI",
+      "output_filename": "Dashboard Report - Active Employees.xlsx"
+    },
+    {
+      "name": "Terminated Employees",
+      "spreadsheet_id": "1fjDBCaFJHke4OTcwpn4gts89H2v3UENstcqdWODd-AU",
+      "output_filename": "Dashboard Report - Term.xlsx"
+    }
+  ]
+}

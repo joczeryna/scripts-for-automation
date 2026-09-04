@@ -1,0 +1,47 @@
+{
+  "job_name": "VCI JSO Audit Data Sync",
+  "source_spreadsheet_id": "11ScapYS8Ac84Yvq6SNMLnfi9g-uEcSQJYwsLNnHxMhk",
+  "destination_spreadsheet_id": "1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw",
+  "browser_profile_folder": "google-browser-profile",
+  "header_row": 1,
+  "data_start_row": 2,
+  "mappings": [
+    {
+      "source_worksheet": "Division Audit Totals",
+      "source_gid": "855789445",
+      "destination_worksheet": "Division Audit Totals",
+      "start_column": "A",
+      "end_column": "K"
+    },
+    {
+      "source_worksheet": "Deviation Statuses",
+      "source_gid": "1972900369",
+      "destination_worksheet": "Deviation by Status",
+      "start_column": "A",
+      "end_column": "Y"
+    },
+    {
+      "source_worksheet": "Foremen",
+      "source_gid": "184113978",
+      "destination_worksheet": "Foremen Data",
+      "start_column": "A",
+      "end_column": "Q"
+    },
+    {
+      "source_worksheet": "Deviations",
+      "source_gid": "1407739991",
+      "destination_worksheet": "Deviations",
+      "start_column": "A",
+      "end_column": "AB"
+    },
+    {
+      "source_worksheet": "Monthly Audit Totals",
+      "source_gid": "1542493577",
+      "source_spreadsheet_id": "1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw",
+      "destination_worksheet": "Audit Totals",
+      "destination_spreadsheet_id": "11ScapYS8Ac84Yvq6SNMLnfi9g-uEcSQJYwsLNnHxMhk",
+      "start_column": "A",
+      "end_column": "K"
+    }
+  ]
+}

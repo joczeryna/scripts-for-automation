@@ -1,0 +1,32 @@
+# Python virtual environment
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Local authenticated browser session
+browser-profile/
+
+# Temporary downloads and workbooks
+temp/
+downloads/
+*.tmp
+~$*.xlsx
+
+# Generated Excel files
+*.xlsx
+*.xlsm
+*.xls
+
+# Runtime logs
+logs/*.log
+
+# Local environment or credential files
+.env
+*.json.key
+credentials.json
+token.json
+
+# VS Code local settings
+.vscode/

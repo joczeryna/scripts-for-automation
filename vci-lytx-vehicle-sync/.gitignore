@@ -1,0 +1,29 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Authenticated browser sessions
+lytx-browser-profile/
+google-browser-profile/
+
+# Temporary processing files
+temp/
+downloads/
+*.tmp
+
+# Downloaded data files
+*.csv
+
+# Runtime logs
+logs/*.log
+
+# Local credential or environment files
+.env
+credentials.json
+token.json
+
+# VS Code local settings
+.vscode/

@@ -1,0 +1,24 @@
+{
+  "lytx": {
+    "portal_url": "https://dc.lytx.com/",
+    "vehicles_url": "https://app.lytx.com/#/admin/vehicles",
+    "download_link_text": "Download CSV",
+    "browser_profile_folder": "lytx-browser-profile",
+    "destination_folder": "C:\\Users\\jd0855\\Downloads\\Reports\\Lytx",
+    "expected_filename_pattern": "^\\d{4}-\\d{2}-\\d{2}_Vehicles_Lytx\\.csv$",
+    "preserve_portal_filename": true
+  },
+  "google_sheet": {
+    "spreadsheet_id": "1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw",
+    "worksheet_name": "OOS Vehicles",
+    "browser_profile_folder": "google-browser-profile",
+    "header_row": 1,
+    "data_start_row": 2
+  },
+  "column_mapping": {
+    "Vehicle": "Truck #",
+    "Group": "Division - Data",
+    "Status": "Status - Data"
+  },
+  "temporary_folder": "temp"
+}

@@ -1,5 +1,7 @@
 VCI Lytx Vehicle Synchronization
 
+Note: These automations were implemented as controlled browser-based ETL solutions due to source-system limitations. Lytx does not provide an available API for the required vehicle export, and the Executive Safety Dashboard experienced internal server errors when large cross-sheet datasets were processed directly. The automations replace repetitive manual download and values-only copy/paste procedures while preserving required controls, validation, logging, and destination integrity. 
+
 Important File-Path Note
 
 Windows user folders depend on the person running the automation. Any path containing C:\Users\jd0855\ must be changed to the current user's Windows profile path, such as C:\Users\<username>\.

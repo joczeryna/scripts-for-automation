@@ -1,5 +1,7 @@
 VCI JSO Worksheet to Safety Dashboard Sync
 
+Note: These automations were implemented as controlled browser-based ETL solutions due to source-system limitations. Lytx does not provide an available API for the required vehicle export, and the Executive Safety Dashboard experienced internal server errors when large cross-sheet datasets were processed directly. The automations replace repetitive manual download and values-only copy/paste procedures while preserving required controls, validation, logging, and destination integrity. 
+
 Important File Path Notice
 
 Windows file paths in this guide use <username> as a placeholder.

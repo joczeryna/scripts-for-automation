@@ -1,6 +1,7 @@
 import csv
 import io
 import re
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -114,7 +115,160 @@ def setup_google_login(
 
         input()
 
-        browser_context.close()
+        try:
+            browser_context.close()
+        except Exception:
+            # Chrome may already have been closed manually after login.
+            pass
+
+
+def is_google_login_page(
+    page: Page,
+) -> bool:
+    """Return True when Google redirected the browser to sign-in."""
+    current_url = page.url.lower()
+
+    return (
+        "accounts.google.com" in current_url
+        or "/signin/" in current_url
+        or "servicelogin" in current_url
+    )
+
+
+def get_or_create_google_sheet_page(
+    browser_context: BrowserContext,
+    spreadsheet_id: str,
+) -> Page:
+    """Reuse a Google Sheets tab when possible instead of opening extras."""
+    spreadsheet_marker = f"/spreadsheets/d/{spreadsheet_id}/"
+
+    for page in browser_context.pages:
+        if (
+            not page.is_closed()
+            and spreadsheet_marker in page.url
+        ):
+            return page
+
+    # Use a fresh page instead of a restored about:blank tab. Chrome can
+    # automatically discard or close restored tabs while they navigate.
+    return browser_context.new_page()
+
+
+def open_google_spreadsheet_page(
+    browser_context: BrowserContext,
+    spreadsheet_id: str,
+) -> Page:
+    """Open the spreadsheet, recreating its tab if Chrome closes it."""
+    spreadsheet_url = (
+        "https://docs.google.com/spreadsheets/d/"
+        f"{spreadsheet_id}/edit"
+    )
+    last_error = None
+
+    for _ in range(3):
+        page = get_or_create_google_sheet_page(
+            browser_context=browser_context,
+            spreadsheet_id=spreadsheet_id,
+        )
+
+        try:
+            page.goto(
+                spreadsheet_url,
+                wait_until="domcontentloaded",
+                timeout=180_000,
+            )
+            time.sleep(3)
+
+            if page.is_closed():
+                continue
+
+            return page
+        except Exception as error:
+            last_error = error
+
+            if "Target page, context or browser has been closed" not in str(
+                error
+            ):
+                raise
+
+    raise RuntimeError(
+        "Google repeatedly closed the destination spreadsheet tab "
+        "while it was opening."
+    ) from last_error
+
+
+def ensure_google_sheet_access(
+    browser_context: BrowserContext,
+    spreadsheet_id: str,
+    worksheet_name: str,
+    force_confirmation: bool = False,
+) -> Page:
+    """
+    Open the destination spreadsheet and pause for interactive sign-in
+    only when the saved Google session is no longer authorized.
+    """
+    page = get_or_create_google_sheet_page(
+        browser_context=browser_context,
+        spreadsheet_id=spreadsheet_id,
+    )
+
+    if (
+        page.is_closed()
+        or spreadsheet_id not in page.url
+        or force_confirmation
+    ):
+        page = open_google_spreadsheet_page(
+            browser_context=browser_context,
+            spreadsheet_id=spreadsheet_id,
+        )
+    else:
+        time.sleep(3)
+
+        if page.is_closed():
+            page = open_google_spreadsheet_page(
+                browser_context=browser_context,
+                spreadsheet_id=spreadsheet_id,
+            )
+
+    if is_google_login_page(page) or force_confirmation:
+        print()
+        print("Google Sheets authentication is required.")
+        print(
+            "Complete Google sign-in in Chrome using the authorized "
+            "VCI account."
+        )
+        print(
+            f"Confirm that the '{worksheet_name}' worksheet is "
+            "visible and editable."
+        )
+        print(
+            "Return to this terminal and press Enter only after "
+            "the worksheet is visible."
+        )
+        input()
+
+        # The user may have completed authentication in a newly opened
+        # tab, so find the spreadsheet tab again before continuing.
+        page = get_or_create_google_sheet_page(
+            browser_context=browser_context,
+            spreadsheet_id=spreadsheet_id,
+        )
+
+        if page.is_closed() or spreadsheet_id not in page.url:
+            page = open_google_spreadsheet_page(
+                browser_context=browser_context,
+                spreadsheet_id=spreadsheet_id,
+            )
+        else:
+            time.sleep(3)
+
+        if is_google_login_page(page):
+            raise RuntimeError(
+                "Google sign-in was not completed. The destination "
+                "spreadsheet is still on the login page."
+            )
+
+    return page
 
 
 def get_worksheet_csv(
@@ -160,6 +314,49 @@ def get_worksheet_csv(
             io.StringIO(response_text)
         )
     )
+
+
+def get_worksheet_csv_with_login_retry(
+    browser_context: BrowserContext,
+    spreadsheet_id: str,
+    worksheet_name: str,
+) -> tuple[list[list[str]], Page]:
+    """Read worksheet CSV and recover interactively from HTTP 401."""
+    page = ensure_google_sheet_access(
+        browser_context=browser_context,
+        spreadsheet_id=spreadsheet_id,
+        worksheet_name=worksheet_name,
+    )
+
+    try:
+        worksheet_rows = get_worksheet_csv(
+            browser_context=browser_context,
+            spreadsheet_id=spreadsheet_id,
+            worksheet_name=worksheet_name,
+        )
+    except RuntimeError as error:
+        error_text = str(error).lower()
+
+        if (
+            "http 401" not in error_text
+            and "not authorized" not in error_text
+        ):
+            raise
+
+        page = ensure_google_sheet_access(
+            browser_context=browser_context,
+            spreadsheet_id=spreadsheet_id,
+            worksheet_name=worksheet_name,
+            force_confirmation=True,
+        )
+
+        worksheet_rows = get_worksheet_csv(
+            browser_context=browser_context,
+            spreadsheet_id=spreadsheet_id,
+            worksheet_name=worksheet_name,
+        )
+
+    return worksheet_rows, page
 
 
 def find_target_columns(
@@ -518,7 +715,12 @@ def update_google_sheet(
         )
 
         try:
-            worksheet_rows = get_worksheet_csv(
+            # Keep one independent page alive. Google can replace or close
+            # the tab used during authentication and initial navigation.
+            keeper_page = browser_context.new_page()
+            keeper_page.goto("about:blank")
+
+            worksheet_rows, page = get_worksheet_csv_with_login_retry(
                 browser_context=browser_context,
                 spreadsheet_id=spreadsheet_id,
                 worksheet_name=worksheet_name,
@@ -527,12 +729,6 @@ def update_google_sheet(
             target_columns = find_target_columns(
                 worksheet_rows=worksheet_rows,
                 target_headers=target_headers,
-            )
-
-            page = (
-                browser_context.pages[0]
-                if browser_context.pages
-                else browser_context.new_page()
             )
 
             open_target_worksheet(
@@ -621,4 +817,7 @@ def update_google_sheet(
             ) from error
 
         finally:
-            browser_context.close()
+            try:
+                browser_context.close()
+            except Exception:
+                pass

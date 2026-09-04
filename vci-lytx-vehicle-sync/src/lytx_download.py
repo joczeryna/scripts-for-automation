@@ -1,4 +1,6 @@
+import csv
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -12,7 +14,10 @@ from playwright.sync_api import (
 
 DOWNLOAD_TIMEOUT_SECONDS = 180
 DOWNLOAD_STABLE_CHECKS = 3
+PARTIAL_DOWNLOAD_STABLE_CHECKS = 10
 DOWNLOAD_POLL_SECONDS = 1
+DOWNLOAD_START_TIMEOUT_SECONDS = 20
+DOWNLOAD_CLICK_ATTEMPTS = 3
 
 
 def get_or_create_lytx_page(
@@ -242,9 +247,10 @@ def wait_for_downloaded_csv(
     temporary_folder: Path,
     expected_filename_pattern: str,
     download_started_at: float,
+    expected_row_count: int | None,
     timeout_seconds: int = DOWNLOAD_TIMEOUT_SECONDS,
 ) -> Path:
-    """Wait until Chrome finishes writing the expected Lytx CSV."""
+    """Wait for a completed CSV or safely recover a stable partial."""
     deadline = time.monotonic() + timeout_seconds
     stable_sizes: dict[Path, tuple[int, int]] = {}
 
@@ -301,6 +307,106 @@ def wait_for_downloaded_csv(
             if stable_count >= DOWNLOAD_STABLE_CHECKS:
                 return candidate
 
+        # Lytx can finish writing the report after its initiating page
+        # closes while Chrome leaves the file with .crdownload appended.
+        # Recover only a new, stable, structurally valid partial from
+        # this run. Older partial files are ignored.
+        for partial_path in temporary_folder.glob("*.csv.crdownload"):
+            try:
+                partial_stat = partial_path.stat()
+                final_name = partial_path.name[: -len(".crdownload")]
+
+                if not re.fullmatch(
+                    expected_filename_pattern,
+                    final_name,
+                    flags=re.IGNORECASE,
+                ):
+                    continue
+
+                if partial_stat.st_mtime < download_started_at - 2:
+                    continue
+
+                if partial_stat.st_size <= 0:
+                    continue
+
+                current_size = partial_stat.st_size
+                previous_size, stable_count = stable_sizes.get(
+                    partial_path,
+                    (-1, 0),
+                )
+
+                if current_size == previous_size:
+                    stable_count += 1
+                else:
+                    stable_count = 1
+
+                stable_sizes[partial_path] = (
+                    current_size,
+                    stable_count,
+                )
+
+                if stable_count < PARTIAL_DOWNLOAD_STABLE_CHECKS:
+                    continue
+
+                with partial_path.open(
+                    "r",
+                    encoding="utf-8-sig",
+                    errors="replace",
+                    newline="",
+                ) as partial_file:
+                    csv_rows = list(csv.reader(partial_file))
+
+                header_row = csv_rows[0] if csv_rows else []
+                data_rows = [
+                    row
+                    for row in csv_rows[1:]
+                    if any(str(value).strip() for value in row)
+                ]
+
+                normalized_headers = {
+                    str(header).replace("\ufeff", "").strip().lower()
+                    for header in header_row
+                }
+                required_headers = {
+                    "vehicle",
+                    "group",
+                    "status",
+                }
+
+                if not required_headers.issubset(normalized_headers):
+                    continue
+
+                if not data_rows:
+                    continue
+
+                # Never promote a partial based only on a stable file
+                # size. Its row count must also match the count shown
+                # by Lytx beside the Download CSV control.
+                if expected_row_count is None:
+                    continue
+
+                if len(data_rows) != expected_row_count:
+                    continue
+
+                final_path = temporary_folder / final_name
+
+                try:
+                    partial_path.replace(final_path)
+                except OSError:
+                    # If Chrome still holds the partial file open, copy
+                    # its stable bytes. The CSV processor performs the
+                    # full header and row validation before any update.
+                    shutil.copy2(partial_path, final_path)
+
+                print(
+                    "Recovered a complete Lytx CSV from Chrome's "
+                    f"stable partial download: {final_name}"
+                )
+                return final_path
+
+            except (OSError, csv.Error):
+                continue
+
         time.sleep(DOWNLOAD_POLL_SECONDS)
 
     partial_files = [
@@ -312,6 +418,61 @@ def wait_for_downloaded_csv(
         f"{timeout_seconds} seconds. Partial downloads: "
         f"{partial_files}"
     )
+
+
+def download_artifact_started(
+    temporary_folder: Path,
+    expected_filename_pattern: str,
+    download_started_at: float,
+) -> bool:
+    """Return True when this run created a CSV or partial download."""
+    for candidate in temporary_folder.iterdir():
+        try:
+            candidate_name = candidate.name
+
+            if candidate_name.lower().endswith(".crdownload"):
+                candidate_name = candidate_name[: -len(".crdownload")]
+
+            if not re.fullmatch(
+                expected_filename_pattern,
+                candidate_name,
+                flags=re.IGNORECASE,
+            ):
+                continue
+
+            candidate_stat = candidate.stat()
+
+            if (
+                candidate_stat.st_mtime >= download_started_at - 2
+                and candidate_stat.st_size > 0
+            ):
+                return True
+        except OSError:
+            continue
+
+    return False
+
+
+def wait_for_download_start(
+    temporary_folder: Path,
+    expected_filename_pattern: str,
+    download_started_at: float,
+    timeout_seconds: int = DOWNLOAD_START_TIMEOUT_SECONDS,
+) -> bool:
+    """Wait briefly for the automated click to create a file."""
+    deadline = time.monotonic() + timeout_seconds
+
+    while time.monotonic() < deadline:
+        if download_artifact_started(
+            temporary_folder=temporary_folder,
+            expected_filename_pattern=expected_filename_pattern,
+            download_started_at=download_started_at,
+        ):
+            return True
+
+        time.sleep(DOWNLOAD_POLL_SECONDS)
+
+    return False
 
 
 def download_lytx_csv(
@@ -398,6 +559,27 @@ def download_lytx_csv(
                 timeout=180_000,
             )
 
+            try:
+                download_label = download_link.inner_text().strip()
+            except Exception:
+                download_label = ""
+
+            vehicle_count_match = re.search(
+                r"\((\d+)\)",
+                download_label,
+            )
+            expected_row_count = (
+                int(vehicle_count_match.group(1))
+                if vehicle_count_match
+                else None
+            )
+
+            if expected_row_count is not None:
+                print(
+                    f"Lytx reports {expected_row_count} vehicles "
+                    "for this download."
+                )
+
             print("Downloading the Lytx vehicle CSV...")
             download_page = download_link.page
 
@@ -414,25 +596,107 @@ def download_lytx_csv(
             )
 
             download_started_at = time.time()
-            click_error = None
+            download_started = False
+            last_click_error = None
 
-            try:
-                download_link.click(timeout=30_000)
-            except Exception as error:
-                # Lytx can close the initiating page immediately after
-                # starting the download. Continue checking the folder.
-                click_error = error
+            for attempt_number in range(1, DOWNLOAD_CLICK_ATTEMPTS + 1):
+                if attempt_number > 1:
+                    print(
+                        "No download started. Refreshing the Vehicles "
+                        f"page and retrying ({attempt_number}/"
+                        f"{DOWNLOAD_CLICK_ATTEMPTS})..."
+                    )
 
-            try:
-                temporary_csv_path = wait_for_downloaded_csv(
+                    page = wait_for_vehicle_page(
+                        browser_context=browser_context,
+                        timeout=60_000,
+                    )
+
+                    try:
+                        page.reload(
+                            wait_until="domcontentloaded",
+                            timeout=180_000,
+                        )
+                        page.wait_for_timeout(5_000)
+                    except Exception:
+                        # Some Lytx downloads replace or close the page.
+                        # Re-detect whichever Vehicles page remains open.
+                        page = wait_for_vehicle_page(
+                            browser_context=browser_context,
+                            timeout=60_000,
+                        )
+
+                    download_link = find_download_link(
+                        page=page,
+                        download_link_text=download_link_text,
+                        timeout=180_000,
+                    )
+                    download_page = download_link.page
+
+                    cdp_session = browser_context.new_cdp_session(
+                        download_page
+                    )
+                    cdp_session.send(
+                        "Browser.setDownloadBehavior",
+                        {
+                            "behavior": "allow",
+                            "downloadPath": str(
+                                temporary_folder.resolve()
+                            ),
+                            "eventsEnabled": True,
+                        },
+                    )
+
+                try:
+                    download_link.scroll_into_view_if_needed()
+
+                    if attempt_number == 1:
+                        download_link.click(timeout=30_000)
+                    elif attempt_number == 2:
+                        # Use the element's native DOM click if Playwright's
+                        # pointer click was accepted but Lytx ignored it.
+                        download_link.evaluate("element => element.click()")
+                    else:
+                        download_link.click(
+                            timeout=30_000,
+                            force=True,
+                        )
+
+                    last_click_error = None
+                except Exception as error:
+                    # A page may close after successfully starting a
+                    # download. The filesystem check below decides whether
+                    # the click actually worked.
+                    last_click_error = error
+
+                download_started = wait_for_download_start(
                     temporary_folder=temporary_folder,
                     expected_filename_pattern=expected_filename_pattern,
                     download_started_at=download_started_at,
                 )
-            except Exception:
-                if click_error is not None:
-                    raise click_error
-                raise
+
+                if download_started:
+                    print("The Lytx CSV download has started.")
+                    break
+
+            if not download_started:
+                if last_click_error is not None:
+                    raise RuntimeError(
+                        "The Download CSV control was found, but none of "
+                        "the automated click attempts started a file."
+                    ) from last_click_error
+
+                raise RuntimeError(
+                    "The Download CSV control was found, but none of the "
+                    "automated click attempts created a download file."
+                )
+
+            temporary_csv_path = wait_for_downloaded_csv(
+                temporary_folder=temporary_folder,
+                expected_filename_pattern=expected_filename_pattern,
+                download_started_at=download_started_at,
+                expected_row_count=expected_row_count,
+            )
 
             suggested_filename = temporary_csv_path.name
 

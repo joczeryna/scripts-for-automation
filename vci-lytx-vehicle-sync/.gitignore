@@ -27,3 +27,12 @@ token.json
 
 # VS Code local settings
 .vscode/
+
+# Lytx runtime and private files
+vci-lytx-vehicle-sync/.venv/
+vci-lytx-vehicle-sync/temp/
+vci-lytx-vehicle-sync/logs/
+vci-lytx-vehicle-sync/download-test-backup/
+vci-lytx-vehicle-sync/*browser-profile*/
+vci-lytx-vehicle-sync/**/__pycache__/
+*.crdownload

@@ -1,197 +1,253 @@
-# VCI Lytx Vehicle Sync Automation
+VCI Lytx Vehicle Synchronization
 
-## Purpose
+Important File-Path Note
 
-This project downloads the authorized VCI vehicle list from Lytx, validates the required CSV columns, replaces the governed vehicle data in Google Sheets, and saves the original CSV in the designated reporting folder.
+Windows user folders depend on the person running the automation. Any path containing C:\Users\jd0855\ must be changed to the current user's Windows profile path, such as C:\Users\<username>\.
 
-## Source Report
+Purpose
 
-### Lytx Vehicles
+This project downloads the complete authorized vehicle report from the Lytx Admin Vehicles portal, validates the downloaded CSV, copies the required vehicle fields into the governed Google Sheet as values only, and saves the dated CSV in the designated report folder.
 
-Portal:
+Source
 
-`https://dc.lytx.com/`
+Lytx portal:
 
-Vehicles Page:
+https://dc.lytx.com/
 
-`https://app.lytx.com/#/admin/vehicles`
+Admin Vehicles page:
 
-Expected Download:
+https://app.lytx.com/#/admin/vehicles
 
-`YYYY-MM-DD_Vehicles_Lytx.csv`
+The automation uses the Download CSV control at the bottom of the Vehicle Management page and includes every downloaded vehicle.
 
-## Google Sheet Destination
+Google Sheet Destination
 
 Google Sheet ID:
 
-`1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw`
+1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw
 
-Worksheet:
+Worksheet tab:
 
-`OOS Vehicles`
+OOS Vehicles
 
-## CSV Destination
+Existing values in the governed destination columns are cleared from row 2 downward and replaced with the current Lytx vehicle data. Header row 1 is preserved.
 
-`C:\Users\jd0855\Downloads\Reports\Lytx`
+Column Mapping
 
-## Normal Use
+Lytx CSV column
 
-1. Confirm Google Chrome is closed for the automation profiles.
-2. Double-click `run_lytx_vehicle_sync.bat`.
-3. Sign in to Lytx and complete MFA if prompted.
-4. Manually open the Admin Vehicles page when instructed.
-5. Press Enter after the vehicle list is visible.
-6. Wait for the success message.
-7. Review the latest log if an error occurs.
+Google Sheet column
 
-## Login Setup
+Vehicle
 
-### Lytx Login
+Truck #
 
-The first-time Lytx login setup is run from Command Prompt:
+Group
 
-`.venv\Scripts\python.exe src\main.py --setup-lytx`
+Division - Data
 
-The project uses a dedicated local Chrome profile stored in:
+Status
 
-`lytx-browser-profile`
+Status - Data
 
-### Google Login
+Only values are pasted. Existing destination formatting and unrelated columns are preserved.
 
-The first-time Google login setup is run from Command Prompt:
+CSV Destination
 
-`.venv\Scripts\python.exe src\main.py --setup-google`
+C:\Users\jd0855\Downloads\Reports\Lytx
 
-The project uses a dedicated local Chrome profile stored in:
+The Windows username portion of this path depends on the current user.
 
-`google-browser-profile`
+Expected filename format:
 
-Do not copy, share, email, or commit either browser-profile folder.
+YYYY-MM-DD_Vehicles_Lytx.csv
 
-## Vehicle Export Rules
+Example:
 
-For each Lytx export, the automation:
+2026-09-04_Vehicles_Lytx.csv
 
-1. Opens the Admin Vehicles page.
-2. Scrolls to the bottom of the vehicle list.
-3. Selects the `Download CSV` control.
-4. Confirms the filename matches `YYYY-MM-DD_Vehicles_Lytx.csv`.
-5. Confirms the required CSV headers exist.
-6. Loads all downloaded vehicle rows.
-7. Replaces the governed Google Sheet columns.
-8. Verifies the Google Sheet data after the update.
-9. Saves the original CSV in the destination folder.
+Normal Use
 
-## Required CSV Headers
+Confirm the computer is connected to the internet.
 
-* Vehicle
-* Group
-* Status
+Close any unnecessary automation Chrome windows.
 
-Header order does not matter. A UTF-8 BOM on the first header is handled automatically.
+Double-click run_lytx_vehicle_sync.bat.
 
-## Google Sheet Mapping
+If Lytx requests authentication, complete sign-in and MFA.
 
-* `Vehicle` to `Truck #`
-* `Group` to `Division - Data`
-* `Status` to `Status - Data`
+If prompted, manually open the Lytx Admin Vehicles page and wait until the vehicle list is fully visible.
 
-The automation replaces existing values beneath these three headers and preserves unrelated Google Sheet columns.
+Return to the terminal and press Enter when instructed.
 
-## Safety Controls
+If Google requests authentication, sign in with the authorized VCI Google account.
 
-The Google Sheet is not updated unless the Lytx export:
+Confirm that the OOS Vehicles worksheet is visible and editable, then return to the terminal and press Enter.
 
-* Downloads successfully
-* Matches the required filename format
-* Contains the required CSV headers
-* Contains populated vehicle records
+Wait for the successful completion message.
 
-The run is not reported as successful unless:
+Review the latest log if an error occurs.
 
-* The Google Sheet update completes
-* The updated Google Sheet data passes verification
-* The final CSV saves successfully
+Do not close the automation Chrome window while a download, Google Sheet update, or save operation is in progress.
 
-Temporary processing files are excluded from source control.
+First-Time Login Setup
 
-## Logs
+Lytx Login
 
-Run logs are saved in:
+From Command Prompt in the project folder, run:
 
-`logs`
+run_lytx_vehicle_sync.bat --setup-lytx
 
-If the Lytx page cannot be processed, a diagnostic screenshot may be saved as:
+Sign in with the authorized VCI Lytx account, complete MFA if requested, navigate to the Admin Vehicles page, and press Enter in the terminal only after the vehicle list is visible.
 
-`logs\lytx_download_failure.png`
-
-Log files and diagnostic images are excluded from source control.
-
-## Troubleshooting
-
-### Lytx Session Expired
-
-Complete login and MFA in the Chrome window opened by the automation.
-
-Manually open:
-
-`https://app.lytx.com/#/admin/vehicles`
-
-Press Enter only after the Vehicle Management list is visible.
-
-### Download CSV Not Found
-
-Confirm the Admin Vehicles page and vehicle list are visible. Review:
-
-`logs\lytx_download_failure.png`
-
-### Google Session Expired
+Google Login
 
 Run:
 
-`.venv\Scripts\python.exe src\main.py --setup-google`
+run_lytx_vehicle_sync.bat --setup-google
 
-Sign in again, select `OOS Vehicles`, and confirm the sheet is editable.
+Sign in with the authorized VCI Google account and confirm that the OOS Vehicles worksheet is visible and editable. Press Enter in the terminal only after the worksheet is ready.
 
-### Required CSV Header Missing
+Configure Both Login Profiles
 
-Confirm the Lytx export includes:
+Run:
 
-* Vehicle
-* Group
-* Status
+run_lytx_vehicle_sync.bat --setup-lytx --setup-google
 
-### Google Sheet Header Missing
+The automation also detects an expired Google session during a normal run. If Google returns an authorization error, Chrome opens the destination spreadsheet and the script pauses so the user can sign in before it retries.
 
-Confirm row 1 of `OOS Vehicles` includes:
+Browser Profiles
 
-* Truck #
-* Division - Data
-* Status - Data
+The project uses dedicated local Chrome profile folders for Lytx and Google authentication. These profiles retain the authorized sessions used by the automation.
 
-### Google Sheets Range Warning
+Do not copy, share, email, or commit browser-profile folders. Each user must create their own local authenticated profiles.
 
-Confirm the project uses the current `google_sheet_update.py`. The current version clears open-ended ranges such as `A2:A` and does not request rows beyond the worksheet grid.
+Download and Validation Rules
 
-### Browser Profile Locked
+The automation:
 
-Close Chrome windows opened by the automation and rerun it.
+Reuses an existing Lytx Admin Vehicles tab when available.
 
-### PowerShell Blocks Activate.ps1
+Opens the configured vehicle page when it is not already open.
 
-Do not change the company execution policy. Run the virtual environment’s Python executable directly:
+Scrolls the page until the Download CSV control renders.
 
-`.venv\Scripts\python.exe`
+Reads the vehicle count shown by Lytx.
 
-## User Handoff
+Confirms that clicking the control actually creates a current-run download.
 
-Each new user must:
+Retries the download control safely if no file starts.
 
-* Install Python and the project requirements
-* Create their own `.venv`
-* Configure their own Lytx browser profile
-* Configure their own Google browser profile
-* Have authorized Lytx access and Google Sheet Editor access
-* Complete one supervised test run
+Accepts only the expected dated Lytx vehicle filename.
 
-Never share passwords, MFA codes, cookies, tokens, or browser-profile folders.
+Validates the required CSV headers.
+
+Confirms that the CSV contains vehicle rows.
+
+Updates Google Sheets only after the CSV passes validation.
+
+Google Sheet Update Rules
+
+The automation:
+
+Opens or reuses the configured destination spreadsheet.
+
+Detects and pauses for Google authentication when required.
+
+Confirms the required destination headers exist.
+
+Clears only the governed destination columns from row 2 downward.
+
+Pastes Truck #, Division - Data, and Status - Data as values only.
+
+Preserves row 1, unrelated columns, and existing worksheet formatting.
+
+Verifies the completed update before reporting success.
+
+Safety Controls
+
+The Google Sheet is not intentionally changed unless the downloaded report:
+
+Uses the expected filename format
+
+Contains the required source headers
+
+Contains populated vehicle rows
+
+Passes CSV processing and validation
+
+The final dated CSV is saved only after the Google Sheet update succeeds. A failed run writes details to the log and reports that the existing destination data was not intentionally changed after the failure.
+
+Logs
+
+Run logs are saved in:
+
+logs
+
+Diagnostic screenshots may also be saved in this folder when the Lytx download step fails.
+
+Troubleshooting
+
+Lytx login expired
+
+Run:
+
+run_lytx_vehicle_sync.bat --setup-lytx
+
+Complete Lytx sign-in and MFA, then confirm the Admin Vehicles page is visible.
+
+Google returned HTTP 401
+
+During a normal run, follow the Google authentication prompt in Chrome and press Enter after the OOS Vehicles worksheet is visible and editable.
+
+You can also refresh the login profile manually:
+
+run_lytx_vehicle_sync.bat --setup-google
+
+Download control not found
+
+Confirm that Chrome displays the Lytx Vehicle Management page and that the vehicle list has finished loading. The Download CSV control is located at the bottom of the page.
+
+Download did not start
+
+Keep the automation Chrome window open. The script retries the download control automatically. If all attempts fail, refresh the Lytx login profile and rerun the automation.
+
+Partial .crdownload file
+
+A .crdownload file means Chrome started but did not finalize the download. Do not manually rename an incomplete file. Review the latest log and rerun after confirming the Lytx page is fully loaded.
+
+Google Sheet tab closed
+
+The updater keeps a separate browser tab alive and recreates the destination spreadsheet tab when needed. Do not manually close the entire automation Chrome window while the update is running.
+
+Required header missing
+
+Confirm the Lytx CSV includes:
+
+Vehicle
+
+Group
+
+Status
+
+Confirm the OOS Vehicles worksheet includes:
+
+Truck #
+
+Division - Data
+
+Status - Data
+
+Python virtual environment not found
+
+Complete the first-time project setup and confirm this file exists:
+
+.venv\Scripts\python.exe
+
+Code compilation check
+
+Run:
+
+.venv\Scripts\python.exe -m py_compile src\main.py src\lytx_download.py src\google_sheet_update.py src\csv_processor.py
+
+No output means the Python files passed the structural code check.

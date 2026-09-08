@@ -1,0 +1,20 @@
+# Environment and authentication files
+**/.env
+**/.env.*
+!**/.env.example
+**/*credentials*.json
+**/token*.json
+**/*secret*.json
+**/*.pem
+**/*.key
+
+# Runtime and generated files
+**/*.log
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+**/browser-profile/
+**/temp/
+**/logs/
+**/data.json

@@ -1,0 +1,9 @@
+{
+  "drivers_report_url": "https://app.lytx.com/#/driver-safety/insights/driversreport",
+  "date_shortcut": "Last 30 Days",
+  "download_link_text": "Download CSV",
+  "destination_folder": "W:\\Dashboards VCI\\Safety Data\\Current\\Lytx",
+  "browser_profile_folder": "browser-profile",
+  "temporary_folder": "temp"
+}
+

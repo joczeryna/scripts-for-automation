@@ -18,3 +18,13 @@
 **/temp/
 **/logs/
 **/data.json
+
+# VCI Safety Report Automation
+VCI_Safety_Report_Automation/.venv/
+VCI_Safety_Report_Automation/browser_profiles/
+VCI_Safety_Report_Automation/downloads/
+VCI_Safety_Report_Automation/logs/
+VCI_Safety_Report_Automation/**/__pycache__/
+VCI_Safety_Report_Automation/**/*.pyc
+VCI_Safety_Report_Automation/**/*.flag
+VCI_Safety_Report_Automation/**/*.crdownload

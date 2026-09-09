@@ -1,0 +1,87 @@
+{
+  "browser": {
+    "channel": "chrome",
+    "profile_directory": "browser_profiles/chrome",
+    "headless": false,
+    "slow_mo_ms": 250,
+    "timeout_ms": 45000,
+    "login_wait_seconds": 300
+  },
+  "download_directory": "downloads",
+  "test_mode": {
+    "enabled": false
+  },
+  "reports": [
+    {
+      "key": "dvir_details",
+      "name": "DVIR_Not_Audited_Details",
+      "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/f5703c1a-2bfc-4b6d-9ee6-a3fb9b64ab01?experience=power-bi",
+      "filters": [
+        {"label": "Operating Company(ies)", "value": "Select all"},
+        {"label": "Group(s)", "value": "Select all"},
+        {"label": "Vehicle(s)", "value": "Select all"},
+        {"label": "DVIR Audit Status", "value": "NON COMPLIANT"},
+        {"label": "Days", "value": "AUTO_FROM_LAST_EXPORT"}
+      ],
+      "gap_cleanup": {
+        "enabled": true,
+        "date_header": "Date"
+      }
+    },
+    {
+      "key": "dvir_vehicle",
+      "name": "DVIR_Not_Audited_Vehicle",
+      "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/11f0b2d3-1302-4bc5-ab93-e5cb937e257d?experience=power-bi",
+      "filters": [
+        {"label": "Operating Company(ies)", "value": "Select all"},
+        {"label": "Group(s)", "value": "Select all"},
+        {"label": "Vehicle(s)", "value": "Select all"},
+        {"label": "Compliance Status", "value": "Select all"},
+        {"label": "Day(s)", "value": "Past 30 Days"}
+      ]
+    },
+    {
+      "key": "gatecheck_details",
+      "name": "Gatecheck_Not_Audited_Details",
+      "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/1aac929e-541f-4db6-b0c7-be5549f5cc85?experience=power-bi",
+      "filters": [
+        {"label": "Subsidiary", "value": "Select all"},
+        {"label": "Group(s)", "value": "Select all"},
+        {"label": "Assets", "value": "Select all"},
+        {"label": "Date", "value": "90"},
+        {"label": "Status", "value": "ACTIVE", "use_default": true}
+      ]
+    },
+    {
+      "key": "jso_details",
+      "name": "JSO_Compliance_Status_Details",
+      "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/66a74b55-17c0-4f18-80a5-dda67cc56f79?experience=power-bi",
+      "two_stage_initialization": {
+        "filter_label": "Subsidiary(ies)",
+        "filter_value": "Select all",
+        "load_wait_seconds": 20
+      },
+      "export_after_initialization": true,
+      "filters": [
+        {"label": "Subsidiary(ies)", "value": "Select all"},
+        {"label": "Office Location(s)", "value": "Select all", "use_default": true},
+        {"label": "Worker(s)", "value": "Select all", "use_default": true},
+        {"label": "JSO Type(s)", "value": "CONSTRUCTION", "use_default": true},
+        {"label": "Days", "value": "45", "use_default": true},
+        {"label": "Indicator Contractor", "value": "False", "use_default": true},
+        {"label": "Green-hat Overdue (Y/N)", "values": ["No", "Yes"], "use_default": true}
+      ]
+    }
+  ],
+  "google_drive": {
+    "folder_name": "DYCOM Reports V2",
+    "folder_url": "https://drive.google.com/open?id=1sRGp6kvtC0YTP7rN1v3ADaHmUAi21o18"
+  },
+  "executive_dashboard": {
+    "name": "Executive Safety Dashboard",
+    "url": "https://docs.google.com/spreadsheets/u/0/d/1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw/edit",
+    "updates_menu": "Updates",
+    "compliance_item": "Safety Compliance Report",
+    "post_click_wait_seconds": 2
+  }
+}

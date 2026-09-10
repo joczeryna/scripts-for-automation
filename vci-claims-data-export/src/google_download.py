@@ -2,11 +2,35 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 
 class AuthenticationError(RuntimeError):
     pass
+
+
+def _get_single_sheet_page(context, spreadsheet_id: str):
+    """Reuse one browser tab and remove tabs left over from earlier runs."""
+    open_pages = [page for page in context.pages if not page.is_closed()]
+    matching_pages = [page for page in open_pages if spreadsheet_id in page.url]
+
+    if matching_pages:
+        page = matching_pages[0]
+    elif open_pages:
+        # Reuse the existing browser tab instead of adding another one.
+        page = open_pages[0]
+    else:
+        page = context.new_page()
+
+    # This is a dedicated automation profile. Keep exactly one tab so restored
+    # login or spreadsheet tabs do not accumulate on subsequent runs.
+    for extra_page in open_pages:
+        if extra_page != page and not extra_page.is_closed():
+            extra_page.close()
+
+    return page
 
 
 def setup_login(spreadsheet_id: str, profile_dir: Path) -> None:
@@ -19,10 +43,53 @@ def setup_login(spreadsheet_id: str, profile_dir: Path) -> None:
             channel="chrome",
             headless=False,
         )
-        page = context.pages[0] if context.pages else context.new_page()
+        page = _get_single_sheet_page(context, spreadsheet_id)
         page.goto(sheet_url, wait_until="domcontentloaded", timeout=120_000)
         print("Sign in to Google and confirm that the spreadsheet opens.")
         input("When the CURRENT tab is visible, return here and press Enter...")
+
+        # Do not report success merely because Enter was pressed. Reuse the
+        # authenticated spreadsheet tab. Avoid reloading it when it is already
+        # open because the VCI CompanyView SSO handoff can interrupt a second
+        # navigation even though authentication succeeded.
+        page = _get_single_sheet_page(context, spreadsheet_id)
+
+        if spreadsheet_id not in page.url:
+            try:
+                page.goto(
+                    sheet_url,
+                    wait_until="domcontentloaded",
+                    timeout=120_000,
+                )
+            except PlaywrightError as exc:
+                # CompanyView may start its token redirect while Playwright is
+                # waiting for the Google navigation. That interruption is an
+                # expected part of SSO; wait for the redirect chain to finish.
+                if "interrupted by another navigation" not in str(exc):
+                    raise
+
+            try:
+                page.wait_for_url(
+                    f"**/spreadsheets/d/{spreadsheet_id}/**",
+                    timeout=120_000,
+                )
+            except PlaywrightTimeoutError as exc:
+                raise AuthenticationError(
+                    "Google/CompanyView sign-in did not return to the "
+                    "authorized spreadsheet."
+                ) from exc
+
+        if "accounts.google.com" in page.url:
+            raise AuthenticationError(
+                "Google sign-in was not completed. The spreadsheet is still "
+                "redirecting to the login page."
+            )
+        if spreadsheet_id not in page.url:
+            raise AuthenticationError(
+                "The authorized spreadsheet was not visible after sign-in."
+            )
+
+        print("Google spreadsheet access confirmed. Saving the browser session...")
         context.close()
 
 
@@ -51,7 +118,7 @@ def download_tab_values(
             accept_downloads=True,
         )
         try:
-            page = context.pages[0] if context.pages else context.new_page()
+            page = _get_single_sheet_page(context, spreadsheet_id)
             response = page.goto(
                 sheet_url,
                 wait_until="domcontentloaded",

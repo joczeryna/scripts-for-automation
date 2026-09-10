@@ -35,11 +35,9 @@
       "end_column": "AB"
     },
     {
-      "source_worksheet": "Monthly Audit Totals",
-      "source_gid": "1542493577",
-      "source_spreadsheet_id": "1ZcpnQn6ZqXFhqaEShqMrWGIpEWKtH-Z-0z9ZGw-OXdw",
-      "destination_worksheet": "Audit Totals",
-      "destination_spreadsheet_id": "11ScapYS8Ac84Yvq6SNMLnfi9g-uEcSQJYwsLNnHxMhk",
+      "source_worksheet": "Audit Totals",
+      "source_gid": "468286198",
+      "destination_worksheet": "Monthly Audit Totals",
       "start_column": "A",
       "end_column": "K"
     }

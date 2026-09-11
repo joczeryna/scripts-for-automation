@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -11,6 +12,9 @@ GOOGLE_EXPORT_URL = (
     "https://docs.google.com/spreadsheets/d/"
     "{spreadsheet_id}/export?format=xlsx"
 )
+
+LOGIN_TIMEOUT_SECONDS = 15 * 60
+LOGIN_CHECK_INTERVAL_SECONDS = 2
 
 
 def setup_google_login(
@@ -57,11 +61,47 @@ def setup_google_login(
             "confirm that the spreadsheet opens."
         )
         print(
-            "Return to this terminal and press Enter only after "
-            "the spreadsheet is visible."
+            "This window will remain open while you sign in. "
+            "The setup will finish automatically after Google "
+            "confirms access to the spreadsheet."
         )
 
-        input()
+        export_url = GOOGLE_EXPORT_URL.format(
+            spreadsheet_id=spreadsheet_id
+        )
+        deadline = time.monotonic() + LOGIN_TIMEOUT_SECONDS
+
+        while time.monotonic() < deadline:
+            if page.is_closed():
+                raise RuntimeError(
+                    "Chrome was closed before Google sign-in completed."
+                )
+
+            try:
+                response = browser_context.request.get(
+                    export_url,
+                    timeout=30_000,
+                )
+
+                if response.ok and response.body().startswith(b"PK"):
+                    print(
+                        "Google sign-in confirmed. The authenticated "
+                        "browser profile has been saved."
+                    )
+                    break
+            except Exception:
+                # Google may interrupt requests while the interactive
+                # sign-in flow is moving between pages. Keep waiting.
+                pass
+
+            page.wait_for_timeout(
+                LOGIN_CHECK_INTERVAL_SECONDS * 1000
+            )
+        else:
+            raise TimeoutError(
+                "Google sign-in was not confirmed within 15 minutes. "
+                "Run --setup-login again and complete the sign-in."
+            )
 
         try:
             browser_context.close()

@@ -119,15 +119,33 @@ function phase4eEnrichSafetyPlans_(sheet, plans) {
   const display = sheet.getDataRange().getDisplayValues();
   const raw = sheet.getDataRange().getValues();
   const header = phase4bHeaderMap_(display[0]);
+
   display.slice(1).forEach(function(row, index) {
     const auditId = String(row[header.auditid] || '').trim();
     const target = phase4bTarget_(row[header.auditname]);
+
     if (!auditId || !target || !plans[target][auditId]) return;
+
     const plan = plans[target][auditId];
-    plan.auditDate = raw[index + 1][header.auditdate];
-    plan.location = String(row[header.location] || '').trim();
-    plan.supervisor = String(row[header.supervisor] || '').trim();
-    plan.auditLink = String(row[header.auditlink] || '').trim();
+    const sourceAuditDate = raw[index + 1][header.auditdate];
+
+    // Do not replace a valid DVIR timestamp with a blank or date-only value.
+    plan.auditDate = phase4eChooseBestAuditDate_(
+      plan.auditDate,
+      sourceAuditDate
+    );
+
+    if (!plan.location) {
+      plan.location = String(row[header.location] || '').trim();
+    }
+
+    if (!plan.supervisor) {
+      plan.supervisor = String(row[header.supervisor] || '').trim();
+    }
+
+    if (!plan.auditLink) {
+      plan.auditLink = String(row[header.auditlink] || '').trim();
+    }
   });
 }
 
@@ -181,32 +199,108 @@ function phase4eApplyTarget_(sheet, plans, equipment, locationDivisions) {
     });
   });
 
-  let nextInsertRow = newPlans.length ? phase4eNextBlankRow_(sheet) : 0;
+  let nextInsertRow = newPlans.length
+    ? phase4eNextBlankRow_(sheet)
+    : 0;
+
   newPlans.forEach(function(plan) {
-    if (nextInsertRow > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
-    const rowNumber = nextInsertRow++;
-    const division = locationDivisions[phase4Normalize_(plan.location)] || '-1';
-    const status = phase4eStatus_(plan, '', equipment, isJso);
-    if (isJso) {
-      const row = [[plan.auditDate || '', phase4eAuditFormula_(plan), division,
-        (plan.assignedNames || []).join('\n'), plan.supervisor || '',
-        phase4bIssueText_(plan), '', '', status]];
-      sheet.getRange(rowNumber, 1, 1, 9).setValues(row);
-      sheet.getRange(rowNumber, 8).setFormula(
-        '=WORKDAY(A' + rowNumber + ',5,Holidays!$A$2:$A$8)'
-      );
-    } else {
-      const row = [[plan.auditDate || '', phase4eAuditFormula_(plan), division,
-        plan.vehicle || '', '', (plan.assignedNames || []).join('\n'),
-        phase4bIssueText_(plan), '', '', status]];
-      sheet.getRange(rowNumber, 1, 1, 10).setValues(row);
-      sheet.getRange(rowNumber, 5).setFormula(
-        '=XLOOKUP(D' + rowNumber + ',Equipment!A:A,Equipment!B:B,"",0)'
-      );
-      sheet.getRange(rowNumber, 9).setFormula(
-        '=WORKDAY(A' + rowNumber + ',5,Holidays!$A$2:$A$8)'
-      );
+    if (nextInsertRow > sheet.getMaxRows()) {
+      sheet.insertRowsAfter(sheet.getMaxRows(), 100);
     }
+
+    const rowNumber = nextInsertRow++;
+    const status = phase4eStatus_(plan, '', equipment, isJso);
+
+    const templateRow = phase4eApplyRowTemplate_(
+      sheet,
+      rowNumber
+    );
+
+    if (isJso) {
+      const row = [[
+        plan.auditDate || '',
+        phase4eAuditFormula_(plan),
+        locationDivisions[phase4Normalize_(plan.location)] || '-1',
+        (plan.assignedNames || []).join('\n'),
+        plan.supervisor || '',
+        phase4bIssueText_(plan),
+        '',
+        '',
+        status
+      ]];
+
+      sheet
+        .getRange(rowNumber, 1, 1, 9)
+        .setValues(row);
+
+      sheet
+        .getRange(rowNumber, 8)
+        .setFormula(
+          '=WORKDAY(A' + rowNumber +
+          ',5,Holidays!$A$2:$A$8)'
+        );
+    } else {
+      /*
+       * Write only the non-formula columns.
+       *
+       * Columns C, E, and I are copied from the preceding
+       * template row and are never overwritten with values.
+       */
+
+      sheet
+        .getRange(rowNumber, 1)
+        .setValue(plan.auditDate || '');
+
+      sheet
+        .getRange(rowNumber, 2)
+        .setFormula(phase4eAuditFormula_(plan));
+
+      sheet
+        .getRange(rowNumber, 4)
+        .setValue(plan.vehicle || '');
+
+      sheet
+        .getRange(rowNumber, 6)
+        .setValue((plan.assignedNames || []).join('\n'));
+
+      sheet
+        .getRange(rowNumber, 7)
+        .setValue(phase4bIssueText_(plan));
+
+      sheet
+        .getRange(rowNumber, 8)
+        .clearContent();
+
+      sheet
+        .getRange(rowNumber, 10)
+        .setValue(status);
+
+      if (!templateRow) {
+        throw new Error(
+          'No formula template row was found for ' +
+          name +
+          ' row ' +
+          rowNumber +
+          '.'
+        );
+      }
+
+      // Copy formulas and automatically adjust their row references.
+      [3, 5, 9].forEach(function(column) {
+        sheet
+          .getRange(templateRow, column)
+          .copyTo(
+            sheet.getRange(rowNumber, column),
+            SpreadsheetApp.CopyPasteType.PASTE_FORMULA,
+            false
+          );
+      });
+    }
+
+    sheet
+      .getRange(rowNumber, 1)
+      .setNumberFormat('M/d/yyyy H:mm:ss');
+
     result.inserts++;
   });
   return result;
@@ -381,4 +475,77 @@ function phase4eCreateBackup_(ss) {
   const stamp = Utilities.formatDate(new Date(), PHASE4_TIME_ZONE, 'yyyy-MM-dd HHmmss');
   const name = ss.getName() + ' - Phase4E Backup - ' + stamp;
   return parents.hasNext() ? source.makeCopy(name, parents.next()) : source.makeCopy(name);
+}
+
+function phase4eChooseBestAuditDate_(existingValue, candidateValue) {
+  if (!phase4eHasAuditDate_(candidateValue)) return existingValue;
+  if (!phase4eHasAuditDate_(existingValue)) return candidateValue;
+
+  const existingHasTime = phase4eAuditDateHasTime_(existingValue);
+  const candidateHasTime = phase4eAuditDateHasTime_(candidateValue);
+
+  if (candidateHasTime && !existingHasTime) return candidateValue;
+
+  return existingValue;
+}
+
+function phase4eHasAuditDate_(value) {
+  if (value instanceof Date) return !isNaN(value.getTime());
+  return String(value == null ? '' : value).trim() !== '';
+}
+
+function phase4eAuditDateHasTime_(value) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (isNaN(date.getTime())) {
+    return /\d{1,2}:\d{2}/.test(String(value || ''));
+  }
+
+  return (
+    date.getHours() !== 0 ||
+    date.getMinutes() !== 0 ||
+    date.getSeconds() !== 0 ||
+    date.getMilliseconds() !== 0
+  );
+}
+
+function phase4eApplyRowTemplate_(sheet, rowNumber) {
+  const width = sheet.getLastColumn();
+  let templateRow = 0;
+
+  // Find the closest populated row above the new row.
+  for (let row = rowNumber - 1; row >= 2; row--) {
+    if (String(sheet.getRange(row, 2).getDisplayValue()).trim()) {
+      templateRow = row;
+      break;
+    }
+  }
+
+  // If necessary, find a populated row below it.
+  if (!templateRow) {
+    for (let row = rowNumber + 1; row <= sheet.getLastRow(); row++) {
+      if (String(sheet.getRange(row, 2).getDisplayValue()).trim()) {
+        templateRow = row;
+        break;
+      }
+    }
+  }
+
+  if (!templateRow) return 0;
+
+  const template = sheet.getRange(templateRow, 1, 1, width);
+  const destination = sheet.getRange(rowNumber, 1, 1, width);
+
+  template.copyTo(
+    destination,
+    SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
+    false
+  );
+
+  template.copyTo(
+    destination,
+    SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION,
+    false
+  );
+  return templateRow;
 }

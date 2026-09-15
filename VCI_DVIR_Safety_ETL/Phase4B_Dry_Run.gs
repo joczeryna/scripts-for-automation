@@ -78,47 +78,126 @@ function previewConsolidatedUpdate() {
 }
 
 function phase4bReadDvir_(sheet, plans) {
-  const rows = sheet.getRange(3, 1, sheet.getLastRow() - 2, Math.max(29, sheet.getLastColumn()))
-    .getDisplayValues();
+  const rowCount = Math.max(0, sheet.getLastRow() - 2);
+
+  if (!rowCount) {
+    return {
+      rowsRead: 0,
+      issueAudits: 0
+    };
+  }
+
+  const width = Math.max(29, sheet.getLastColumn());
+  const range = sheet.getRange(3, 1, rowCount, width);
+  const displayRows = range.getDisplayValues();
+  const rawRows = range.getValues();
+
+  const issueNames = [
+    'Service Brakes',
+    'Parking Brake',
+    'Steering Mechanism',
+    'Lighting Devices',
+    'Tires',
+    'Horn',
+    'Windshield Wipers',
+    'Rear Vision Mirrors',
+    'Coupling Devices',
+    'Wheels And Rims',
+    'Emergency Equipment',
+    'Windshield Condition',
+    'Oil Level',
+    'Trailer'
+  ];
+
   let issueAudits = 0;
-  rows.forEach(function(row) {
+
+  displayRows.forEach(function(row, rowIndex) {
     if (phase4Normalize_(row[0]) !== 'vci') return;
+
     const auditId = String(row[4] || '').trim();
     if (!auditId) return;
-    const issueNames = [
-      'Service Brakes', 'Parking Brake', 'Steering Mechanism', 'Lighting Devices',
-      'Tires', 'Horn', 'Windshield Wipers', 'Rear Vision Mirrors',
-      'Coupling Devices', 'Wheels And Rims', 'Emergency Equipment',
-      'Windshield Condition', 'Oil Level', 'Trailer'
-    ];
+
     const issues = [];
-    for (let index = 12; index <= 25; index++) {
-      const answer = String(row[index] || '').trim().toUpperCase();
-      if (answer === 'DEFECT/DEFICIENCY' || answer === 'NEEDS ATTENTION') {
-        issues.push(issueNames[index - 12]);
+
+    /*
+     * DVIR response columns M through Z.
+     *
+     * Only DEFECT/DEFICIENCY and NEEDS ATTENTION
+     * indicate an actual issue.
+     *
+     * NO DEFECT/DEFICIENCY, numeric response IDs,
+     * blanks, and unrelated values are ignored.
+     */
+    for (let columnIndex = 12; columnIndex <= 25; columnIndex++) {
+      const answer = String(row[columnIndex] || '')
+        .trim()
+        .toUpperCase();
+
+      if (
+        answer === 'DEFECT/DEFICIENCY' ||
+        answer === 'NEEDS ATTENTION'
+      ) {
+        phase4bPushUnique_(
+          issues,
+          issueNames[columnIndex - 12]
+        );
       }
     }
+
     const deviations = Number(row[26] || 0);
     const openDeviations = Number(row[27] || 0);
     const comments = String(row[28] || '').trim();
-    if (deviations > 0 && openDeviations > 0 && issues.length === 0) issues.push('SEE FIELD AUDIT');
-    if (issues.length === 0 && !(comments && deviations === 0)) return;
 
-    plans.Issues[auditId] = phase4bMergePlan_(plans.Issues[auditId], {
-      auditId: auditId,
-      sourceType: 'Issues',
-      auditType: 'DVIR',
-      vehicle: String(row[10] || '').trim(),
-      assignedNames: [String(row[6] || '').trim()],
-      workerNos: [String(row[7] || '').trim()],
-      openQuestions: issues,
-      resolvedQuestions: [],
-      plannedStatus: '',
-      comments: comments
-    });
+    /*
+     * An open deviation without a mapped DVIR category
+     * is still an actual unresolved issue.
+     */
+    if (
+      deviations > 0 &&
+      openDeviations > 0 &&
+      issues.length === 0
+    ) {
+      issues.push('SEE FIELD AUDIT');
+    }
+
+    /*
+     * Do not create an Issues record when the DVIR
+     * contains no actual defect or open deviation.
+     * Comments alone do not create an Issues row.
+     */
+    if (issues.length === 0) return;
+
+    plans.Issues[auditId] = phase4bMergePlan_(
+      plans.Issues[auditId],
+      {
+        auditId: auditId,
+        sourceType: 'Issues',
+        auditType: 'DVIR',
+
+        // Preserve the complete source date and time.
+        auditDate: rawRows[rowIndex][5],
+
+        vehicle: String(row[10] || '').trim(),
+        assignedNames: [
+          String(row[6] || '').trim()
+        ],
+        workerNos: [
+          String(row[7] || '').trim()
+        ],
+        openQuestions: issues,
+        resolvedQuestions: [],
+        plannedStatus: '',
+        comments: comments
+      }
+    );
+
     issueAudits++;
   });
-  return { rowsRead: rows.length, issueAudits: issueAudits };
+
+  return {
+    rowsRead: displayRows.length,
+    issueAudits: issueAudits
+  };
 }
 
 function phase4bReadSafety_(sheet, plans) {
@@ -172,15 +251,240 @@ function phase4bReadSafety_(sheet, plans) {
 }
 
 function phase4bMergePlan_(existing, incoming) {
-  if (!existing) return incoming;
-  ['assignedNames', 'workerNos', 'openQuestions', 'resolvedQuestions'].forEach(function(field) {
-    (incoming[field] || []).forEach(function(value) { phase4bPushUnique_(existing[field], value); });
+  if (!existing) {
+    incoming.assignedNames =
+      phase4bDeduplicateDriverNames_(
+        incoming.assignedNames || []
+      );
+
+    incoming.openQuestions =
+      phase4bDeduplicateQuestions_(
+        incoming.openQuestions || []
+      );
+
+    incoming.resolvedQuestions =
+      phase4bDeduplicateQuestions_(
+        incoming.resolvedQuestions || []
+      );
+
+    return incoming;
+  }
+
+  existing.assignedNames =
+    phase4bMergeDriverNames_(
+      existing.assignedNames || [],
+      incoming.assignedNames || []
+    );
+
+  (incoming.workerNos || []).forEach(function(value) {
+    phase4bPushUnique_(
+      existing.workerNos,
+      value
+    );
   });
-  if (incoming.vehicle) existing.vehicle = incoming.vehicle;
-  if (incoming.auditType) existing.auditType = incoming.auditType;
-  if (incoming.comments) existing.comments = incoming.comments;
-  existing.plannedStatus = incoming.plannedStatus;
+
+  (incoming.openQuestions || []).forEach(function(value) {
+    phase4bPushUniqueQuestion_(
+      existing.openQuestions,
+      value
+    );
+
+    /*
+     * Open status takes precedence if the same issue
+     * also appears in Resolved.
+     */
+    existing.resolvedQuestions =
+      existing.resolvedQuestions.filter(
+        function(resolvedValue) {
+          return (
+            phase4dIssueSignature_(resolvedValue) !==
+            phase4dIssueSignature_(value)
+          );
+        }
+      );
+  });
+
+  (incoming.resolvedQuestions || []).forEach(function(value) {
+    const existsAsOpen =
+      existing.openQuestions.some(function(openValue) {
+        return (
+          phase4dIssueSignature_(openValue) ===
+          phase4dIssueSignature_(value)
+        );
+      });
+
+    if (!existsAsOpen) {
+      phase4bPushUniqueQuestion_(
+        existing.resolvedQuestions,
+        value
+      );
+    }
+  });
+
+  if (incoming.vehicle) {
+    existing.vehicle = incoming.vehicle;
+  }
+
+  if (incoming.auditType) {
+    existing.auditType = incoming.auditType;
+  }
+
+  if (incoming.comments) {
+    existing.comments = incoming.comments;
+  }
+
+  existing.auditDate =
+    phase4eChooseBestAuditDate_(
+      existing.auditDate,
+      incoming.auditDate
+    );
+
+  existing.plannedStatus =
+    incoming.plannedStatus;
+
   return existing;
+}
+
+function phase4bMergeDriverNames_(
+  existingNames,
+  incomingNames
+) {
+  const result =
+    phase4bDeduplicateDriverNames_(
+      existingNames
+    );
+
+  incomingNames.forEach(function(incomingName) {
+    const incomingText =
+      String(incomingName || '').trim();
+
+    if (!incomingText) return;
+
+    const incomingKeys =
+      phase4dNameKeys_(incomingText);
+
+    let matchingIndex = -1;
+
+    result.some(function(existingName, index) {
+      const existingKeys =
+        phase4dNameKeys_(existingName);
+
+      const matches =
+        existingKeys.some(function(key) {
+          return incomingKeys.indexOf(key) !== -1;
+        });
+
+      if (matches) {
+        matchingIndex = index;
+        return true;
+      }
+
+      return false;
+    });
+
+    if (matchingIndex === -1) {
+      result.push(incomingText);
+      return;
+    }
+
+    /*
+     * Prefer LAST, FIRST whenever one source provides it.
+     */
+    const existingHasComma =
+      result[matchingIndex].indexOf(',') !== -1;
+
+    const incomingHasComma =
+      incomingText.indexOf(',') !== -1;
+
+    if (
+      incomingHasComma &&
+      !existingHasComma
+    ) {
+      result[matchingIndex] = incomingText;
+    }
+  });
+
+  return result;
+}
+
+function phase4bDeduplicateDriverNames_(names) {
+  return phase4bMergeDriverNamesInternal_(
+    [],
+    names || []
+  );
+}
+
+function phase4bMergeDriverNamesInternal_(
+  result,
+  names
+) {
+  names.forEach(function(name) {
+    const text = String(name || '').trim();
+    if (!text) return;
+
+    const keys = phase4dNameKeys_(text);
+    let matchingIndex = -1;
+
+    result.some(function(existingName, index) {
+      const existingKeys =
+        phase4dNameKeys_(existingName);
+
+      if (
+        existingKeys.some(function(key) {
+          return keys.indexOf(key) !== -1;
+        })
+      ) {
+        matchingIndex = index;
+        return true;
+      }
+
+      return false;
+    });
+
+    if (matchingIndex === -1) {
+      result.push(text);
+    } else if (
+      text.indexOf(',') !== -1 &&
+      result[matchingIndex].indexOf(',') === -1
+    ) {
+      result[matchingIndex] = text;
+    }
+  });
+
+  return result;
+}
+
+function phase4bDeduplicateQuestions_(questions) {
+  const result = [];
+
+  (questions || []).forEach(function(value) {
+    phase4bPushUniqueQuestion_(
+      result,
+      value
+    );
+  });
+
+  return result;
+}
+
+function phase4bPushUniqueQuestion_(array, value) {
+  const text = String(value || '').trim();
+  if (!text) return;
+
+  const signature =
+    phase4dIssueSignature_(text);
+
+  const alreadyExists =
+    array.some(function(existingValue) {
+      return (
+        phase4dIssueSignature_(existingValue) ===
+        signature
+      );
+    });
+
+  if (!alreadyExists) {
+    array.push(text);
+  }
 }
 
 function phase4bCompareTarget_(sheet, plans, outOfService) {

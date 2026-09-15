@@ -1,0 +1,48 @@
+{
+  "browser": {
+    "channel": "chrome",
+    "profile_directory": "browser_profiles/chrome",
+    "headless": false,
+    "slow_mo_ms": 250,
+    "timeout_ms": 45000,
+    "authentication_wait_seconds": 300
+  },
+  "download_directory": "downloads",
+  "test_mode": {
+    "enabled": true,
+    "stop_after_stage": "drive_upload"
+  },
+  "dvir_details": {
+    "name": "DVIR_Details",
+    "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/1c52588b-8f49-4915-be62-b07cffe09e90?experience=power-bi",
+    "company_filter": "Company Code",
+    "company_value": "VCI CONSTRUCTION, LLC",
+    "office_filter": "Office Location",
+    "office_value": "Select All",
+    "start_date_filter": "Audit Start Date",
+    "end_date_filter": "Audit End Date",
+    "lookback_days": 7,
+    "download_timeout_seconds": 300,
+    "output_filename": "DVIR_Details.xlsx",
+    "expected_sheet": "DVIR_Details",
+    "required_headers": [],
+    "minimum_columns": 28,
+    "data_start_row": 3,
+    "first_column_value": "VCI",
+    "required_data_columns": [4]
+  },
+  "safety_deviations": {
+    "name": "Safety Deviations",
+    "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/reports/8ae478c4-354f-401e-969f-a409d5416774/ReportSection?experience=power-bi",
+    "date_filter": "Audit Date",
+    "download_timeout_seconds": 300,
+    "output_filename_pattern": "safety-deviations-{run_date}.xlsx",
+    "output_date_format": "%m-%d-%Y",
+    "expected_sheet": "Export",
+    "required_headers": [["Auditid", "Audit ID", "Audit Id"], "Audit Name", "Deviation Question"]
+  },
+  "google_drive": {
+    "folder_name": "Reports - DVIR Details",
+    "folder_url": "https://drive.google.com/drive/folders/1-pkJhlzx80h2bGsAxPhu_WXkul2UiwQa"
+  }
+}

@@ -1,0 +1,9 @@
+.venv/
+browser_profiles/
+downloads/
+logs/
+**/__pycache__/
+*.pyc
+*.flag
+*.crdownload
+

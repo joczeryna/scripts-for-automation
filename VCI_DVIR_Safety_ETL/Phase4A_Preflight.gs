@@ -130,9 +130,20 @@ function phase4ValidateSafety_(sheet) {
     throw new Error('Safety Deviations Export contains no usable report rows.');
   }
   phase4RequireHeaderSet_(sheet, 1, [
-    'Subsidiary', 'Worker Nbr', 'Auditid', 'Audit Name',
-    'Deviation Question', 'Deviation Status'
+    'Auditid', 'Audit Name', 'Deviation Question', 'Deviation Status'
   ]);
+  phase4RequireAnyHeader_(
+    sheet,
+    1,
+    ['Subsidiary', 'Operating Company'],
+    'Subsidiary or Operating Company'
+  );
+  phase4RequireAnyHeader_(
+    sheet,
+    1,
+    ['Worker Nbr', 'Worker Number'],
+    'Worker Nbr or Worker Number'
+  );
 }
 
 function phase4RequireHeaders_(sheet, rowNumber, expected) {
@@ -154,6 +165,20 @@ function phase4RequireHeaderSet_(sheet, rowNumber, expected) {
   });
   if (missing.length > 0) {
     throw new Error(sheet.getName() + ' is missing required headers: ' + missing.join(', '));
+  }
+}
+
+function phase4RequireAnyHeader_(sheet, rowNumber, accepted, label) {
+  const actual = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(phase4Normalize_);
+  const found = accepted.some(function(header) {
+    return actual.indexOf(phase4Normalize_(header)) !== -1;
+  });
+  if (!found) {
+    throw new Error(
+      sheet.getName() + ' is missing required header: ' + label
+    );
   }
 }
 

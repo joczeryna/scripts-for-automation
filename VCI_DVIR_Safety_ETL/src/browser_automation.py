@@ -389,12 +389,36 @@ def export_dvir_details(
 
 def _move_audit_date_to_latest(page: Page, label: str) -> None:
     logging.info("Moving %s end date to the latest available date", label)
+    # The updated report renamed this slicer from "Audit Date" to
+    # "AuditDate". Ignore spaces and punctuation so either caption works.
+    compact_label = re.sub(r"[^a-z0-9]", "", label.casefold())
+    label_pattern = r"^\s*" + r"\s*".join(
+        re.escape(character) for character in compact_label
+    ) + r"\s*$"
     label_node, surface = _find_across_surfaces(
-        page, lambda item: item.get_by_text(re.compile(f"^{re.escape(label)}$", re.I))
+        page,
+        lambda item: item.get_by_text(re.compile(label_pattern, re.I), exact=False),
     )
     if not label_node:
-        raise RuntimeError(f"Safety Deviations date filter was not found: {label}")
-    container = label_node.locator("xpath=ancestor::*[self::div][1]")
+        debug_dir = Path(__file__).resolve().parents[1] / "logs"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        page.screenshot(
+            path=str(debug_dir / "safety_deviations_date_filter_not_found.png"),
+            full_page=True,
+        )
+        raise RuntimeError(
+            f"Safety Deviations date filter was not found: {label}. "
+            "A diagnostic screenshot was saved in the logs folder."
+        )
+
+    # The report update separated the title and date controls into nested
+    # elements. Search the whole slicer visual before falling back globally.
+    container = label_node.locator(
+        "xpath=ancestor::*[contains(@class,'visual-container') or "
+        "contains(@class,'visualContainer')][1]"
+    )
+    if container.count() == 0:
+        container = label_node.locator("xpath=ancestor::*[self::div][1]")
     sliders = container.get_by_role("slider")
     if sliders.count() < 2:
         sliders = surface.get_by_role("slider")

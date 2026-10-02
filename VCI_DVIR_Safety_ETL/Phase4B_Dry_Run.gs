@@ -652,6 +652,19 @@ function phase4bQuestion_(value) {
 function phase4bHeaderMap_(headers) {
   const result = {};
   headers.forEach(function(value, index) { result[phase4Normalize_(value)] = index; });
+
+  /*
+   * Power BI renamed two Safety Deviations export headers on 10/02/2026.
+   * Preserve the established internal keys so both the previous and updated
+   * export schemas flow through the same validated processing logic.
+   */
+  if (result.subsidiary == null && result.operatingcompany != null) {
+    result.subsidiary = result.operatingcompany;
+  }
+  if (result.workernbr == null && result.workernumber != null) {
+    result.workernbr = result.workernumber;
+  }
+
   return result;
 }
 

@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+credentials.json
+token.json
+token_old.json
+.env
+
+exports/
+backups/
+diagnostics/
+logs/
+
+Thumbs.db
+.DS_Store

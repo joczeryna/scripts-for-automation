@@ -1,0 +1,20 @@
+{
+  "power_bi_file": "C:\\Users\\jd0855\\Downloads\\Safety Reports.pbix",
+  "power_bi_window_timeout_seconds": 180,
+  "report_view_load_timeout_seconds": 180,
+  "report_pages": [
+    "Leadership JSOs",
+    "JSO - Deviation Statuses",
+    "JSO - All Audits"
+  ],
+  "rolling_month_count": 3,
+  "date_filter": "Dimension Audit Create Date.Calendar Hierarchy",
+  "leadership_spreadsheet_id": "1czeE_DDjigqIvGy8az4z0k1XcwP0R-bYVVxD-G-184c",
+  "jso_spreadsheet_id": "11ScapYS8Ac84Yvq6SNMLnfi9g-uEcSQJYwsLNnHxMhk",
+  "destination_tabs": {
+    "leadership_import": "Data Import",
+    "leadership_summary": "Summary",
+    "all_audits": "All JSOs",
+    "deviation_statuses": "Deviation Statuses"
+  }
+}

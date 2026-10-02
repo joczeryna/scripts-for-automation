@@ -1,0 +1,21 @@
+{
+  "export_root": "exports",
+  "google_oauth": {
+    "credentials_file": "credentials.json",
+    "authorized_user_file": "token.json"
+  },
+  "leadership_spreadsheet_id": "1czeE_DDjigqIvGy8az4z0k1XcwP0R-bYVVxD-G-184c",
+  "jso_spreadsheet_id": "11ScapYS8Ac84Yvq6SNMLnfi9g-uEcSQJYwsLNnHxMhk",
+  "tabs": {
+    "leadership_import": "Data Import",
+    "leadership_summary": "Summary",
+    "all_jsos": "All JSOs",
+    "deviation_statuses": "Deviation Statuses"
+  },
+  "tab_gids": {
+    "leadership_import": 229474577,
+    "deviation_statuses": 1972900369,
+    "all_jsos": 0
+  },
+  "audit_id_header": "Audit Id"
+}

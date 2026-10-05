@@ -52,26 +52,56 @@
         {"label": "Status", "value": "ACTIVE", "use_default": true}
       ]
     },
+{
+  "key": "jso_details",
+  "name": "JSO_Compliance_Status_Details",
+  "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/66a74b55-17c0-4f18-80a5-dda67cc56f79?experience=power-bi",
+  "two_stage_initialization": {
+    "filter_label": "Operating Company(ies)",
+    "filter_value": "Select all",
+    "load_wait_seconds": 20
+  },
+  "export_after_initialization": true,
+  "filters": [
     {
-      "key": "jso_details",
-      "name": "JSO_Compliance_Status_Details",
-      "url": "https://app.powerbi.com/groups/me/apps/50104887-9c8d-478f-9c19-44bdaeecf234/rdlreports/66a74b55-17c0-4f18-80a5-dda67cc56f79?experience=power-bi",
-      "two_stage_initialization": {
-        "filter_label": "Subsidiary(ies)",
-        "filter_value": "Select all",
-        "load_wait_seconds": 20
-      },
-      "export_after_initialization": true,
-      "filters": [
-        {"label": "Subsidiary(ies)", "value": "Select all"},
-        {"label": "Office Location(s)", "value": "Select all", "use_default": true},
-        {"label": "Worker(s)", "value": "Select all", "use_default": true},
-        {"label": "JSO Type(s)", "value": "CONSTRUCTION", "use_default": true},
-        {"label": "Days", "value": "45", "use_default": true},
-        {"label": "Indicator Contractor", "value": "False", "use_default": true},
-        {"label": "Green-hat Overdue (Y/N)", "values": ["No", "Yes"], "use_default": true}
-      ]
+      "label": "Operating Company(ies)",
+      "value": "Select all"
+    },
+    {
+      "label": "Office Location(s)",
+      "value": "Select all",
+      "use_default": true
+    },
+    {
+      "label": "Worker(s)",
+      "value": "Select all",
+      "use_default": true
+    },
+    {
+      "label": "JSO Type(s)",
+      "value": "CONSTRUCTION",
+      "use_default": true
+    },
+    {
+      "label": "Days",
+      "value": "45",
+      "use_default": true
+    },
+    {
+      "label": "Indicator Contractor",
+      "value": "False",
+      "use_default": true
+    },
+    {
+      "label": "Green-Hat Overdue ( Y/N)",
+      "values": [
+        "No",
+        "Yes"
+      ],
+      "use_default": true
     }
+  ]
+}
   ],
   "google_drive": {
     "folder_name": "DYCOM Reports V2",

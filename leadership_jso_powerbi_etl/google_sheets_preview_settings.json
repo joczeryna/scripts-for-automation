@@ -1,5 +1,8 @@
 {
   "export_root": "exports",
+  "google_api_timeout_seconds": 60,
+  "audit_tail_rows": 300,
+  "leadership_backup_rows": 5000,
   "google_oauth": {
     "credentials_file": "credentials.json",
     "authorized_user_file": "token.json"

@@ -116,20 +116,33 @@ def main() -> int:
             "apply_leadership_google_update_v1.py",
             google_settings_path,
         )
-        run_step(
-            project_dir,
-            "apply_deviation_statuses_google_update_v1.py",
-            google_settings_path,
-            "--gate-file",
-            gate_path,
+        deviation_write_required = gate["deviationStatuses"].get(
+            "writeRequired", True
         )
-        run_step(
-            project_dir,
-            "apply_all_jsos_google_update_v1.py",
-            google_settings_path,
-            "--gate-file",
-            gate_path,
-        )
+        if deviation_write_required:
+            run_step(
+                project_dir,
+                "apply_deviation_statuses_google_update_v1.py",
+                google_settings_path,
+                "--gate-file",
+                gate_path,
+            )
+        else:
+            LOG.info(
+                "Skipping Deviation Statuses writer: validated destination already matches source"
+            )
+
+        all_jsos_rows = int(gate["allJsos"]["proposedAppendRows"])
+        if all_jsos_rows:
+            run_step(
+                project_dir,
+                "apply_all_jsos_google_update_v1.py",
+                google_settings_path,
+                "--gate-file",
+                gate_path,
+            )
+        else:
+            LOG.info("Skipping All JSOs writer: no new rows to append")
 
         result = {
             "mode": "LEADERSHIP JSO CONTROLLED PRODUCTION WORKFLOW",
@@ -144,6 +157,8 @@ def main() -> int:
                 "proposedRowsFromOverlap"
             ],
             "allJsosRowsToAppend": gate["allJsos"]["proposedAppendRows"],
+            "deviationWriterExecuted": deviation_write_required,
+            "allJsosWriterExecuted": all_jsos_rows > 0,
             "controlledGoogleWritesCompleted": [
                 "Leadership Data Import A2:G and B1",
                 "Deviation Statuses A:N from verified overlap",

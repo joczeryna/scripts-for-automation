@@ -25,7 +25,7 @@ class PreviewError(RuntimeError):
     pass
 
 
-def google_retry(label: str, action, attempts: int = 5):
+def google_retry(label: str, action, attempts: int = 2):
     retryable = {429, 500, 502, 503, 504}
     for attempt in range(1, attempts + 1):
         try:
@@ -34,7 +34,7 @@ def google_retry(label: str, action, attempts: int = 5):
             status = getattr(getattr(error, "response", None), "status_code", None)
             if status not in retryable or attempt == attempts:
                 raise
-            delay = min(60, 5 * (2 ** (attempt - 1)))
+            delay = 5 * attempt
             LOG.warning(
                 "%s returned Google API %s; retrying in %s seconds (%s/%s)",
                 label,
@@ -65,7 +65,11 @@ def google_client(settings: dict[str, Any], base: Path) -> gspread.Client:
         flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
         credentials = flow.run_local_server(port=0)
         token_path.write_text(credentials.to_json(), encoding="utf-8")
-    return gspread.authorize(credentials)
+    client = gspread.authorize(credentials)
+    timeout_seconds = int(settings.get("google_api_timeout_seconds", 60))
+    if hasattr(client, "set_timeout"):
+        client.set_timeout(timeout_seconds)
+    return client
 
 
 def latest_export_directory(root: Path) -> Path:
@@ -197,6 +201,24 @@ def padded(row: list[str], width: int) -> list[str]:
     return [normalized(value) for value in (row[:width] + [""] * width)[:width]]
 
 
+def rows_equivalent(
+    source: list[list[str]],
+    destination: list[list[str]],
+    headers: list[str],
+    width: int,
+) -> bool:
+    if len(source) != len(destination):
+        return False
+    for source_row, destination_row in zip(source, destination):
+        left = padded(source_row, width)
+        right = padded(destination_row, width)
+        for index in range(width):
+            header = headers[index] if index < len(headers) else ""
+            if comparable(left[index], header) != comparable(right[index], header):
+                return False
+    return True
+
+
 def comparable(value: Any, header: str) -> str:
     text = normalized(value)
     key = normalized(header).casefold()
@@ -225,6 +247,40 @@ def one_column(values: list[list[str]]) -> list[str]:
     return [normalized(row[0]) if row else "" for row in values]
 
 
+def tail_value_info(
+    values: list[list[str]],
+    start_sheet_row: int,
+    header_sheet_row: int,
+    label: str,
+) -> tuple[int, str, int]:
+    """Return last row/value and first row of its trailing contiguous group."""
+    last_offset = None
+    last_value = ""
+    for offset in range(len(values) - 1, -1, -1):
+        value = normalized(values[offset][0] if values[offset] else "")
+        if value:
+            last_offset = offset
+            last_value = value
+            break
+    if last_offset is None:
+        raise PreviewError(f"No Audit Id was found in {label}")
+
+    group_offset = last_offset
+    while group_offset > 0:
+        previous = normalized(
+            values[group_offset - 1][0] if values[group_offset - 1] else ""
+        )
+        if previous != last_value:
+            break
+        group_offset -= 1
+
+    last_sheet_row = start_sheet_row + last_offset
+    group_start_row = start_sheet_row + group_offset
+    if group_start_row <= header_sheet_row:
+        raise PreviewError(f"Invalid trailing Audit Id group in {label}")
+    return last_sheet_row, last_value, group_start_row
+
+
 def worksheet_by_gid(book, gid: int, expected_title: str):
     worksheets = google_retry(
         f"List worksheets for {book.title}",
@@ -239,6 +295,25 @@ def worksheet_by_gid(book, gid: int, expected_title: str):
                 )
             return worksheet
     raise PreviewError(f"Worksheet ID {gid} was not found in {book.title}")
+
+
+def worksheets_by_gid(book, expected: dict[int, str]) -> dict[int, Any]:
+    worksheets = google_retry(
+        f"List worksheets for {book.title}",
+        lambda: book.worksheets(),
+    )
+    by_gid = {int(worksheet.id): worksheet for worksheet in worksheets}
+    result = {}
+    for gid, title in expected.items():
+        worksheet = by_gid.get(int(gid))
+        if worksheet is None:
+            raise PreviewError(f"Worksheet ID {gid} was not found in {book.title}")
+        if worksheet.title != title:
+            raise PreviewError(
+                f"Sheet ID {gid} is named {worksheet.title!r}; expected {title!r}"
+            )
+        result[int(gid)] = worksheet
+    return result
 
 
 def preview(settings_path: Path) -> dict[str, Any]:
@@ -269,34 +344,42 @@ def preview(settings_path: Path) -> dict[str, Any]:
     )
     tabs = settings["tabs"]
     gids = settings["tab_gids"]
-    all_ws = worksheet_by_gid(jso_book, gids["all_jsos"], tabs["all_jsos"])
-    dev_ws = worksheet_by_gid(
-        jso_book, gids["deviation_statuses"], tabs["deviation_statuses"]
+    jso_worksheets = worksheets_by_gid(
+        jso_book,
+        {
+            int(gids["all_jsos"]): tabs["all_jsos"],
+            int(gids["deviation_statuses"]): tabs["deviation_statuses"],
+        },
     )
-    import_ws = worksheet_by_gid(
-        leadership_book, gids["leadership_import"], tabs["leadership_import"]
+    leadership_worksheets = worksheets_by_gid(
+        leadership_book,
+        {int(gids["leadership_import"]): tabs["leadership_import"]},
     )
-    summary_ws = google_retry(
-        "Open Leadership Summary tab",
-        lambda: leadership_book.worksheet(tabs["leadership_summary"]),
-    )
+    all_ws = jso_worksheets[int(gids["all_jsos"])]
+    dev_ws = jso_worksheets[int(gids["deviation_statuses"])]
+    import_ws = leadership_worksheets[int(gids["leadership_import"])]
 
-    # Read only the small header regions here. Full-column D:D requests on
-    # these large tabs caused long-running Google API 503 responses. Audit Id
-    # tails are located below with bounded, reverse chunk reads.
+    # One bounded batch obtains both headers and both Audit Id tails. This
+    # replaces repeated large-sheet reads that previously caused multi-minute
+    # 503 retry cycles.
+    tail_size = int(settings.get("audit_tail_rows", 300))
+    all_tail_start = max(2, int(all_ws.row_count) - tail_size + 1)
+    dev_tail_start = max(2, int(dev_ws.row_count) - tail_size + 1)
     batch = google_retry(
         "Read JSO validation ranges",
         lambda: jso_book.values_batch_get(
             [
                 f"'{tabs['all_jsos']}'!A1:Z20",
                 f"'{tabs['deviation_statuses']}'!A1:N20",
+                f"'{tabs['all_jsos']}'!D{all_tail_start}:D{all_ws.row_count}",
+                f"'{tabs['deviation_statuses']}'!D{dev_tail_start}:D{dev_ws.row_count}",
             ]
         ),
     )
     value_ranges = batch.get("valueRanges", [])
-    if len(value_ranges) != 2:
+    if len(value_ranges) != 4:
         raise PreviewError(
-            f"Expected two Google Sheets validation ranges; received {len(value_ranges)}"
+            f"Expected four Google Sheets validation ranges; received {len(value_ranges)}"
         )
     all_header_values = value_ranges[0].get("values", [])
     all_header_row, all_headers = find_header_row(
@@ -307,8 +390,11 @@ def preview(settings_path: Path) -> dict[str, Any]:
         raise PreviewError(
             f"All JSOs Audit Id moved from column D to column {all_id_col + 1}"
         )
-    last_all_sheet_row, last_audit_id = last_nonblank_sheet_cell(
-        all_ws, "D", all_header_row + 1, "All JSOs"
+    last_all_sheet_row, last_audit_id, _ = tail_value_info(
+        value_ranges[2].get("values", []),
+        all_tail_start,
+        all_header_row + 1,
+        "All JSOs",
     )
     last_all_index = last_all_sheet_row - 1
 
@@ -399,8 +485,11 @@ def preview(settings_path: Path) -> dict[str, Any]:
         raise PreviewError(
             "Deviation Statuses Audit Id is no longer in controlled column D"
         )
-    last_dev_sheet_row, last_dev_audit_id = last_nonblank_sheet_cell(
-        dev_ws, "D", dev_header_row + 1, "Deviation Statuses"
+    last_dev_sheet_row, last_dev_audit_id, destination_dev_group_start = tail_value_info(
+        value_ranges[3].get("values", []),
+        dev_tail_start,
+        dev_header_row + 1,
+        "Deviation Statuses",
     )
     last_dev_index = last_dev_sheet_row - 1
     source_dev_matches = matching_positions(
@@ -414,20 +503,14 @@ def preview(settings_path: Path) -> dict[str, Any]:
     # An Audit Id can occupy multiple rows; selecting the final occurrence
     # would skip earlier records from the same Audit Id group.
     source_dev_overlap = source_dev_matches[0]
-    destination_dev_overlap = first_row_of_trailing_value_group(
-        dev_ws,
-        "D",
-        last_dev_sheet_row,
-        last_dev_audit_id,
-        dev_header_row + 1,
-        "Deviation Statuses",
-    ) - 1
-    destination_overlap_result = google_retry(
-        "Read Deviation Statuses overlap row",
+    destination_dev_overlap = destination_dev_group_start - 1
+    destination_dev_group_rows = google_retry(
+        "Read Deviation Statuses overlap group",
         lambda: dev_ws.get(
-            f"A{destination_dev_overlap + 1}:N{destination_dev_overlap + 1}"
+            f"A{destination_dev_group_start}:N{last_dev_sheet_row}"
         ),
     )
+    destination_overlap_result = destination_dev_group_rows[:1]
     destination_overlap_row = (
         destination_overlap_result[0] if destination_overlap_result else []
     )
@@ -490,6 +573,15 @@ def preview(settings_path: Path) -> dict[str, Any]:
         0,
         len(deviation_write_rows) - existing_deviation_tail_rows,
     )
+    existing_deviation_rows_match = rows_equivalent(
+        deviation_write_rows[:existing_deviation_tail_rows],
+        destination_dev_group_rows,
+        deviation_headers,
+        14,
+    )
+    deviation_write_required = (
+        proposed_deviation_new_rows > 0 or not existing_deviation_rows_match
+    )
 
     grand_total_rows = sum(
         1
@@ -519,7 +611,7 @@ def preview(settings_path: Path) -> dict[str, Any]:
             "destinationGid": import_ws.id,
             "reportDateCell": "B1",
             "reportDateValue": date.today().isoformat(),
-            "summaryTab": summary_ws.title,
+            "summaryTab": tabs["leadership_summary"],
             "summarySort": "Column E ascending",
         },
         "allJsos": {
@@ -547,6 +639,8 @@ def preview(settings_path: Path) -> dict[str, Any]:
                 existing_deviation_tail_rows,
             ),
             "proposedNewRows": proposed_deviation_new_rows,
+            "existingRowsMatchSource": existing_deviation_rows_match,
+            "writeRequired": deviation_write_required,
             "columns": "A:N",
         },
         "writesPerformed": False,

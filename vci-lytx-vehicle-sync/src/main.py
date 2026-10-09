@@ -34,6 +34,10 @@ LOG_FOLDER = (
     / "logs"
 )
 
+CURRENT_LYTX_FOLDER = Path(
+    r"W:\Dashboards VCI\Safety Data\Current\Lytx-Vehicles"
+)
+
 
 def configure_logging() -> Path:
     """
@@ -297,6 +301,13 @@ def run_sync(
         lytx_config["destination_folder"]
     )
 
+    current_lytx_folder = Path(
+        config.get(
+            "current_lytx_folder",
+            str(CURRENT_LYTX_FOLDER),
+        )
+    )
+
     target_headers = list(
         column_mapping.values()
     )
@@ -378,6 +389,22 @@ def run_sync(
         destination_filename=downloaded_filename,
     )
 
+    if (
+        os.path.normcase(
+            os.path.abspath(destination_folder)
+        )
+        == os.path.normcase(
+            os.path.abspath(current_lytx_folder)
+        )
+    ):
+        current_lytx_csv_path = final_csv_path
+    else:
+        current_lytx_csv_path = copy_csv_to_destination(
+            source_csv_path=downloaded_csv_path,
+            destination_folder=current_lytx_folder,
+            destination_filename=downloaded_filename,
+        )
+
     logging.info(
         "Lytx vehicle synchronization completed successfully."
     )
@@ -388,6 +415,7 @@ def run_sync(
             "rows_written"
         ],
         "final_csv_path": final_csv_path,
+        "current_lytx_csv_path": current_lytx_csv_path,
         "worksheet_name": google_result[
             "worksheet_name"
         ],
@@ -494,6 +522,10 @@ def main() -> int:
             print(
                 f"CSV saved to: "
                 f"{result['final_csv_path']}"
+            )
+            print(
+                f"Current Lytx CSV saved to: "
+                f"{result['current_lytx_csv_path']}"
             )
 
         logging.info(

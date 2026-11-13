@@ -1,0 +1,17 @@
+{
+  "pbix_file": "W:\\Dashboards VCI\\LJSO\\Leadership JSO.pbix",
+  "window_title_keyword": "Leadership JSO",
+  "refresh_mode": "data_only",
+  "open_timeout_seconds": 180,
+  "refresh_timeout_seconds": 1200,
+  "save_timeout_seconds": 120,
+  "pdf_export_timeout_seconds": 300,
+  "close_power_bi_when_finished": true,
+  "destinations": {
+    "main_folder": "W:\\Dashboards VCI\\LJSO\\Main",
+    "main_filename": "Leadership JSO.pdf",
+    "backup_folder": "W:\\Dashboards VCI\\LJSO\\Backup-Archive",
+    "backup_filename_prefix": "Leadership JSO",
+    "date_format": "%Y-%m-%d"
+  }
+}

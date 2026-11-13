@@ -1,4 +1,7 @@
-# Environment and authentication files
+Set-Content -Path "C:\Users\jd0855\Desktop\VCI_Automation\.gitignore" -Value @'
+# ==========================================
+# Environment and Authentication
+# ==========================================
 **/.env
 **/.env.*
 !**/.env.example
@@ -7,24 +10,48 @@
 **/*secret*.json
 **/*.pem
 **/*.key
+SecurityBindings
 
-# Runtime and generated files
-**/*.log
+# ==========================================
+# Python & Virtual Environments
+# ==========================================
 **/.venv/
 **/venv/
 **/__pycache__/
 **/*.pyc
-**/browser-profile/
-**/temp/
+**/*.pyo
+
+# ==========================================
+# Automation Runtime, Logs, and Temp Files
+# ==========================================
+**/*.log
 **/logs/
+**/temp/
+**/downloads/
+**/browser-profile/
+**/browser_profiles/
+**/*.crdownload
+**/*.tmp
+**/*.flag
 **/data.json
 
-# VCI Safety Report Automation
-VCI_Safety_Report_Automation/.venv/
-VCI_Safety_Report_Automation/browser_profiles/
-VCI_Safety_Report_Automation/downloads/
-VCI_Safety_Report_Automation/logs/
-VCI_Safety_Report_Automation/**/__pycache__/
-VCI_Safety_Report_Automation/**/*.pyc
-VCI_Safety_Report_Automation/**/*.flag
-VCI_Safety_Report_Automation/**/*.crdownload
+# ==========================================
+# Power BI Project (.pbip) Artifacts
+# ==========================================
+**/localSettings.json
+**/.pbi/localSettings.json
+**/.pbi/editorSettings.json
+**/cache.abf
+*.lock
+
+# ==========================================
+# OS Metadata & Backups
+# ==========================================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+~$*
+* - Copy.py
+'@
+**/debug_save_as_*

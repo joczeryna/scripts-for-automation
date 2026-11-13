@@ -1,0 +1,17 @@
+# Byte-compiled / cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Local logs and diagnostics
+logs/
+diagnostics/
+*.log
+
+# Generated test artifacts
+*.pdf
+*.pbix

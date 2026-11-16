@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from google_download import download_reports, setup_google_login
+from google_download import AuthenticationError, download_reports, setup_google_login
 from workbook_processor import clean_workbook
 
 
@@ -35,7 +35,6 @@ def load_config() -> dict:
 
     required_settings = {
         "destination_folder",
-        "browser_profile_folder",
         "temporary_folder",
         "worksheet_date_format",
         "required_headers",
@@ -158,19 +157,15 @@ def replace_destination_file(
 def run_setup(
     config: dict,
 ) -> None:
-    """Create the authenticated browser profile."""
-    browser_profile_path = (
-        PROJECT_ROOT
-        / config["browser_profile_folder"]
-    )
-
+    """Verify Google sign-in in a single tab of the open Chrome window."""
+    cdp_endpoint = config.get("cdp_endpoint", "auto")
     first_spreadsheet_id = (
         config["reports"][0]["spreadsheet_id"]
     )
 
     setup_google_login(
-        browser_profile_path=browser_profile_path,
         spreadsheet_id=first_spreadsheet_id,
+        cdp_endpoint=cdp_endpoint,
     )
 
 
@@ -189,10 +184,7 @@ def run_export(
             "is connected."
         )
 
-    browser_profile_path = (
-        PROJECT_ROOT
-        / config["browser_profile_folder"]
-    )
+    cdp_endpoint = config.get("cdp_endpoint", "auto")
 
     temporary_root = (
         PROJECT_ROOT
@@ -229,7 +221,7 @@ def run_export(
         downloads = download_reports(
             reports=config["reports"],
             download_folder=download_folder,
-            browser_profile_path=browser_profile_path,
+            cdp_endpoint=cdp_endpoint,
         )
 
         cleaned_reports = []
@@ -312,7 +304,7 @@ def parse_arguments():
         "--setup-login",
         action="store_true",
         help=(
-            "Open Chrome and create the authorized Google session."
+            "Open a tab in running Chrome to confirm the authorized Google session."
         ),
     )
 
@@ -345,6 +337,19 @@ def main() -> int:
         )
 
         return 0
+
+    except AuthenticationError as exc:
+        logging.error(
+            "AUTHENTICATION REQUIRED: %s",
+            exc,
+        )
+
+        logging.info(
+            "Review the log file: %s",
+            log_path,
+        )
+
+        return 2
 
     except Exception:
         logging.exception(

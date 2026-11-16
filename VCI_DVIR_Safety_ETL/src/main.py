@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -74,6 +75,67 @@ def run_browser_action(browser: dict, action):
             return action(page)
         finally:
             close_context(context)
+
+
+def _connect_to_open_chrome(playwright, cdp_endpoint: str | None = None):
+    """Attach to an already running Chrome instance via DevToolsActivePort."""
+    if cdp_endpoint and cdp_endpoint != "auto":
+        return playwright.chromium.connect_over_cdp(cdp_endpoint)
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise AuthenticationError("LOCALAPPDATA environment variable not found.")
+
+    port_file = (
+        Path(local_app_data)
+        / "Google"
+        / "Chrome"
+        / "User Data"
+        / "DevToolsActivePort"
+    )
+    if not port_file.exists():
+        raise AuthenticationError(
+            "Chrome remote debugging is not active. In Chrome, open "
+            "chrome://inspect/#remote-debugging and check "
+            "'Allow remote debugging for this browser instance'."
+        )
+
+    lines = port_file.read_text(encoding="utf-8").strip().splitlines()
+    if len(lines) < 2:
+        raise AuthenticationError("Chrome DevToolsActivePort file is incomplete.")
+
+    port, ws_path = lines[0].strip(), lines[1].strip()
+    ws_url = f"ws://127.0.0.1:{port}{ws_path}"
+    return playwright.chromium.connect_over_cdp(ws_url)
+
+
+def run_open_chrome_action(browser_cfg: dict, action):
+    """Open a single tab in the user's running Chrome window and close only that tab."""
+    cdp_endpoint = browser_cfg.get("cdp_endpoint", "auto")
+
+    with sync_playwright() as playwright:
+        try:
+            cdp_browser = _connect_to_open_chrome(playwright, cdp_endpoint)
+        except PlaywrightError as exc:
+            raise AuthenticationError(
+                f"Could not attach to open Chrome ({exc}). Ensure 'Allow remote "
+                "debugging' is checked at chrome://inspect/#remote-debugging and "
+                "click Allow if Chrome prompts you."
+            ) from exc
+
+        page = None
+        try:
+            if not cdp_browser.contexts:
+                raise AuthenticationError("No active Chrome profile context found.")
+
+            context = cdp_browser.contexts[0]
+            page = context.new_page()
+            page.set_default_timeout(browser_cfg.get("timeout_ms", 45_000))
+            return action(page)
+        finally:
+            if page is not None and not page.is_closed():
+                page.close()
+            cdp_browser.close()
 
 
 def validate_report(path: Path, report: dict) -> tuple[int, int]:
@@ -161,7 +223,7 @@ def main() -> int:
     if upload_marker.exists():
         logging.info("Skipping Drive upload because today's validated pair is already complete.")
     else:
-        run_browser_action(
+        run_open_chrome_action(
             browser,
             lambda page: upload_to_drive(
                 page, settings["google_drive"], [dvir_path, safety_path]

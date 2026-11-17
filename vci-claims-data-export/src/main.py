@@ -46,10 +46,11 @@ def run() -> int:
     log_path = configure_logging()
     try:
         config = load_config()
-        profile_dir = PROJECT_ROOT / "browser-profile"
+        cdp_endpoint = config.get("cdp_endpoint", "auto")
+        gid = config.get("gid")
 
         if args.setup_login:
-            setup_login(config["spreadsheet_id"], profile_dir)
+            setup_login(config["spreadsheet_id"], cdp_endpoint=cdp_endpoint)
             logging.info("Google sign-in setup completed.")
             return 0
 
@@ -61,7 +62,11 @@ def run() -> int:
 
         logging.info("Downloading static values from the authorized %s tab.", config["source_tab"])
         download_tab_values(
-            config["spreadsheet_id"], config["source_tab"], profile_dir, downloaded
+            config["spreadsheet_id"],
+            config["source_tab"],
+            downloaded,
+            cdp_endpoint=cdp_endpoint,
+            gid=gid,
         )
 
         logging.info("Validating and isolating the %s tab.", config["source_tab"])
